@@ -118,9 +118,18 @@ export default function BettingCalculator() {
     }
     uncappedKelly = Math.max(0, uncappedKelly); // Ensure Kelly is not negative
 
+    // Calculate the bet fraction based on settings
+    let primaryBetFraction = 0;
+    if (isPlusEdge) {
+      primaryBetFraction = kellyFractionMultiplier * uncappedKelly;
+      primaryBetFraction = Math.min(primaryBetFraction, maxBetPercentage / 100); // Cap by maxBetPercentage from settings
+      primaryBetFraction = Math.max(0, primaryBetFraction); // Ensure non-negative
+    }
+
+    // Calculate the fixed "Safe Bet Fraction" for informational display
     const safeFractionValue = isPlusEdge ? Math.min(0.25 * uncappedKelly, 0.05) : 0;
     
-    let recommendedBetAmount = isPlusEdge ? safeFractionValue * bankrollVal : 0;
+    let recommendedBetAmount = primaryBetFraction * bankrollVal; // This is now driven by settings
 
     let shouldStopBetting = false;
     if (trackLosses) {
@@ -139,9 +148,9 @@ export default function BettingCalculator() {
       effectiveMarketPrice: marketPrice_calc_internal,
       edge,
       oddsRatioB: payout_ratio_b,
-      kellyFraction: uncappedKelly,
-      safeBetFraction: safeFractionValue,
-      finalBet: recommendedBetAmount,
+      kellyFraction: uncappedKelly, // This remains the full uncapped Kelly
+      safeBetFraction: safeFractionValue, // Store the calculated safe fraction
+      finalBet: recommendedBetAmount, // Main recommended bet, driven by settings
       isPlusEdge,
     });
   }
@@ -348,16 +357,9 @@ export default function BettingCalculator() {
                     </div>
                     
                     <div className="space-y-1">
-                      <p className="text-sm font-medium dark:text-gray-300">Safe Bet Fraction (0.25 * Kelly, max 5%):</p>
-                      <p className="text-xl font-bold dark:text-gray-200">
-                        {(result.safeBetFraction * 100).toFixed(2)}%
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Info: Configurable Kelly ({kellyFractionMultiplier * 100}% of Kelly, max {maxBetPercentage}%):</p>
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Info: Safe Bet Fraction (0.25 * Kelly, max 5%):</p>
                       <p className="text-lg font-semibold text-gray-500 dark:text-gray-400">
-                        {(Math.min(kellyFractionMultiplier * result.kellyFraction, maxBetPercentage / 100) * 100).toFixed(2)}%
+                        {(result.safeBetFraction * 100).toFixed(2)}% (Suggests: ${(result.safeBetFraction * parseFloat(bankroll)).toFixed(2)})
                       </p>
                     </div>
                   </>
@@ -366,7 +368,7 @@ export default function BettingCalculator() {
               
               {result.isPlusEdge ? (
                 <div className="pt-4 border-t dark:border-gray-700">
-                  <p className="text-lg font-semibold mb-1 dark:text-gray-200">Recommended Bet (using Safe Bet Fraction):</p>
+                  <p className="text-lg font-semibold mb-1 dark:text-gray-200">Recommended Bet (from Settings):</p>
                   <p className="text-3xl font-bold text-center text-blue-600 dark:text-blue-400">
                     ${result.finalBet.toFixed(2)}
                   </p>
