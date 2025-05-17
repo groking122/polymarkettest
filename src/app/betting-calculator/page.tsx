@@ -19,6 +19,8 @@ interface BettingResult {
   safeBetFraction: number; // Capped Kelly for recommendation
   finalBet: number; // Recommended bet amount
   isPlusEdge: boolean;
+  confidenceLabel: string;
+  isNearExtremeProb: boolean; // For "capped for safety" message
 }
 
 interface BetHistory {
@@ -27,6 +29,19 @@ interface BetHistory {
   outcome: 'win' | 'loss' | null;
   profit: number;
 }
+
+// Helper function (can be outside the component if preferred, but fine here for now)
+const calibratedProbability = (score: number): number => {
+  const raw = (score + 1) / 2;
+  return 0.95 * raw + 0.025; // Caps between 2.5% and 97.5%
+};
+
+const getConfidenceLabel = (score: number): string => {
+  const abs = Math.abs(score);
+  if (abs >= 0.8) return "High ✅";
+  if (abs >= 0.5) return "Medium ⚠️";
+  return "Low ❗";
+};
 
 export default function BettingCalculator() {
   const [marketCentsInput, setMarketCentsInput] = useState<string>("63"); // Market price in cents
@@ -46,6 +61,8 @@ export default function BettingCalculator() {
 
   // Client-side only rendering
   const [mounted, setMounted] = useState(false);
+  const [extremeGravityWarning, setExtremeGravityWarning] = useState<string | null>(null);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -73,7 +90,8 @@ export default function BettingCalculator() {
 
   function calculateBet() {
     setErrorMessage("");
-    setResult(null); // Clear previous results
+    setResult(null);
+    setExtremeGravityWarning(null); // Reset warning
 
     const marketCentsNum = parseInt(marketCentsInput);
     if (isNaN(marketCentsNum) || marketCentsNum < 1 || marketCentsNum > 99) {
@@ -87,6 +105,10 @@ export default function BettingCalculator() {
       setErrorMessage("Crowd gravity score must be between -1 and 1.");
       return;
     }
+    // UI Warning for extreme gravity score
+    if (Math.abs(gravityScoreNum) > 0.9) {
+      setExtremeGravityWarning("⚠️ Crowd consensus is extreme. Treat with caution — calibration may be off or whale votes might dominate.");
+    }
 
     const bankrollVal = parseFloat(bankroll);
     if (isNaN(bankrollVal) || bankrollVal <= 0) {
@@ -94,7 +116,9 @@ export default function BettingCalculator() {
       return;
     }
 
-    const normalizedCrowdProbability = (gravityScoreNum + 1) / 2;
+    // Use CALIBRATED probability
+    const normalizedCrowdProbability = calibratedProbability(gravityScoreNum);
+    
     let p_calc = normalizedCrowdProbability;
     let marketPrice_calc_internal = marketPriceDecimal;
 
@@ -104,33 +128,26 @@ export default function BettingCalculator() {
     }
 
     if (marketPrice_calc_internal <= 0 || marketPrice_calc_internal >= 1) {
-      setErrorMessage("Effective market price for calculation is invalid (must be > 0 and < 1). Adjust inputs or bet type.");
+      setErrorMessage("Effective market price for calculation is invalid. Adjust inputs or bet type.");
       return;
     }
-
+    
     const payout_ratio_b = (1 - marketPrice_calc_internal) / marketPrice_calc_internal;
     const edge = (p_calc * payout_ratio_b) - (1 - p_calc);
     const isPlusEdge = edge > 0;
+    const confidence = getConfidenceLabel(gravityScoreNum);
 
     let uncappedKelly = 0;
     if (isPlusEdge && payout_ratio_b !== 0) {
       uncappedKelly = edge / payout_ratio_b;
     }
-    uncappedKelly = Math.max(0, uncappedKelly); // Ensure Kelly is not negative
+    uncappedKelly = Math.max(0, uncappedKelly); 
 
-    // Calculate the bet fraction based on settings
-    let primaryBetFraction = 0;
-    if (isPlusEdge) {
-      primaryBetFraction = kellyFractionMultiplier * uncappedKelly;
-      primaryBetFraction = Math.min(primaryBetFraction, maxBetPercentage / 100); // Cap by maxBetPercentage from settings
-      primaryBetFraction = Math.max(0, primaryBetFraction); // Ensure non-negative
-    }
-
-    // Calculate the fixed "Safe Bet Fraction" for informational display
-    const safeFractionValue = isPlusEdge ? Math.min(0.25 * uncappedKelly, 0.05) : 0;
+    // PRIMARY BET LOGIC: Kelly-safe betting controls (0.25 * Kelly, capped at 5% of bankroll)
+    const safeFractionApplied = isPlusEdge ? Math.min(0.25 * uncappedKelly, 0.05) : 0;
+    let recommendedBetAmount = safeFractionApplied * bankrollVal;
     
-    let recommendedBetAmount = primaryBetFraction * bankrollVal; // This is now driven by settings
-
+    // Stop loss check (applies to the recommendedBetAmount)
     let shouldStopBetting = false;
     if (trackLosses) {
       const totalLoss = betHistory
@@ -138,9 +155,13 @@ export default function BettingCalculator() {
         .reduce((sum, bet) => sum + bet.profit, 0);
       if (Math.abs(totalLoss) > bankrollVal * (maxLossPercentage / 100)) {
         shouldStopBetting = true;
-        recommendedBetAmount = 0; // Override bet if stop loss hit
+        recommendedBetAmount = 0; 
       }
     }
+
+    // "Probability capped for safety" message logic
+    // Check if p_calc is at the extremes of the calibratedProbability function
+    const isNearExtremeProb = p_calc >= 0.9749 || p_calc <= 0.0251; // Using a tiny tolerance
     
     setResult({
       marketImpliedDecimal: marketPriceDecimal,
@@ -148,10 +169,12 @@ export default function BettingCalculator() {
       effectiveMarketPrice: marketPrice_calc_internal,
       edge,
       oddsRatioB: payout_ratio_b,
-      kellyFraction: uncappedKelly, // This remains the full uncapped Kelly
-      safeBetFraction: safeFractionValue, // Store the calculated safe fraction
-      finalBet: recommendedBetAmount, // Main recommended bet, driven by settings
+      kellyFraction: uncappedKelly, // Full uncapped Kelly
+      safeBetFraction: safeFractionApplied, // The fraction used for the main bet
+      finalBet: recommendedBetAmount, // Main recommended bet
       isPlusEdge,
+      confidenceLabel: confidence,
+      isNearExtremeProb,
     });
   }
 
@@ -217,6 +240,13 @@ export default function BettingCalculator() {
           />
         </div>
       </div>
+      
+      {/* Extreme Gravity Warning UI */}
+      {extremeGravityWarning && (
+        <div className="mb-4 p-3 rounded-md border border-orange-400 bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:border-orange-600 dark:text-orange-300 text-sm">
+          {extremeGravityWarning}
+        </div>
+      )}
       
       <div className="grid gap-6">
         <Card className="shadow-md dark:bg-gray-900">
@@ -317,7 +347,31 @@ export default function BettingCalculator() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              {/* Odds Comparison Block */}
+              <div className={`p-3 rounded-md border ${result.isPlusEdge ? 'border-green-300 bg-green-50 dark:bg-green-900/30 dark:border-green-700' : 'border-red-300 bg-red-50 dark:bg-red-900/30 dark:border-red-700'}`}> 
+                <h3 className="text-lg font-semibold mb-2 text-center ${result.isPlusEdge ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}">📊 Odds Comparison</h3>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="font-medium dark:text-gray-200">🧠 Crowd Odds ({betType.toUpperCase()}):</span>
+                    <span className="font-bold dark:text-white">{(result.calculatedProbability * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium dark:text-gray-200">💼 Market Odds ({betType.toUpperCase()}):</span>
+                    <span className="font-bold dark:text-white">{(result.effectiveMarketPrice * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-1 mt-1 dark:border-gray-600">
+                    <span className="font-medium dark:text-gray-200">📊 Difference:</span>
+                    <span className={`font-bold ${result.calculatedProbability - result.effectiveMarketPrice >= 0 ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                      {((result.calculatedProbability - result.effectiveMarketPrice) * 100).toFixed(1).startsWith('-') ? '' : '+'}{((result.calculatedProbability - result.effectiveMarketPrice) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+                <p className={`mt-2 text-center font-semibold ${result.isPlusEdge ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                  {result.isPlusEdge ? '✅ You have better odds → Edge detected — bet recommended' : '⚠️ No edge — avoid'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start pt-2">
                 <div className="space-y-1">
                   <p className="text-sm font-medium dark:text-gray-300">Market-Implied Probability (Original):</p>
                   <p className="text-xl font-bold dark:text-gray-200">
@@ -329,6 +383,13 @@ export default function BettingCalculator() {
                   <p className="text-sm font-medium dark:text-gray-300">Calculated Probability for Bet ({betType.toUpperCase()}):</p>
                   <p className="text-xl font-bold dark:text-gray-200">
                     {(result.calculatedProbability * 100).toFixed(2)}%
+                  </p>
+                </div>
+                
+                <div className="space-y-1 md:col-span-2">
+                  <p className="text-sm font-medium dark:text-gray-300">Confidence (Gravity Score Based):</p>
+                  <p className="text-xl font-bold dark:text-gray-200">
+                    {result.confidenceLabel}
                   </p>
                 </div>
                 
@@ -357,9 +418,17 @@ export default function BettingCalculator() {
                     </div>
                     
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Info: Safe Bet Fraction (0.25 * Kelly, max 5%):</p>
+                      <p className="text-sm font-medium dark:text-gray-300">Applied Bet Fraction (Safe Strategy):</p>
+                      <p className="text-xl font-bold dark:text-gray-200">
+                        {(result.safeBetFraction * 100).toFixed(2)}%
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Info: Configurable Kelly (from Settings - {kellyFractionMultiplier * 100}% Kelly, max {maxBetPercentage}%):</p>
                       <p className="text-lg font-semibold text-gray-500 dark:text-gray-400">
-                        {(result.safeBetFraction * 100).toFixed(2)}% (Suggests: ${(result.safeBetFraction * parseFloat(bankroll)).toFixed(2)})
+                        {(Math.min(kellyFractionMultiplier * result.kellyFraction, maxBetPercentage / 100) * 100).toFixed(2)}%
+                         (Suggests: ${(Math.min(kellyFractionMultiplier * result.kellyFraction, maxBetPercentage / 100) * parseFloat(bankroll)).toFixed(2)})
                       </p>
                     </div>
                   </>
@@ -367,22 +436,27 @@ export default function BettingCalculator() {
               </div>
               
               {result.isPlusEdge ? (
-                <div className="pt-4 border-t dark:border-gray-700">
-                  <p className="text-lg font-semibold mb-1 dark:text-gray-200">Recommended Bet (from Settings):</p>
+              <div className="pt-4 border-t dark:border-gray-700">
+                  <p className="text-lg font-semibold mb-1 dark:text-gray-200">Recommended Bet (Safe Strategy):</p>
                   <p className="text-3xl font-bold text-center text-blue-600 dark:text-blue-400">
-                    ${result.finalBet.toFixed(2)}
-                  </p>
+                  ${result.finalBet.toFixed(2)}
+                </p>
                   {result.finalBet > 0 && (
                     <p className="text-xs text-center text-gray-500 dark:text-gray-400 mt-1">
                       This is {(result.finalBet / parseFloat(bankroll) * 100).toFixed(2)}% of your ${bankroll} bankroll.
                     </p>
                   )}
-                  {shouldStopBetting && (
-                    <p className="text-red-600 dark:text-red-400 font-bold text-center mt-2">
-                      Stop betting! Daily loss limit reached.
+                  {result.isNearExtremeProb && result.finalBet > 0 && (
+                    <p className="text-xs text-center text-blue-500 dark:text-blue-400 mt-1 font-semibold">
+                      🛡️ Probability capped for safety. Bet size has been limited accordingly.
                     </p>
                   )}
-                </div>
+                {shouldStopBetting && (
+                  <p className="text-red-600 dark:text-red-400 font-bold text-center mt-2">
+                    Stop betting! Daily loss limit reached.
+                  </p>
+                )}
+              </div>
               ) : (
                 <div className="pt-4 border-t dark:border-gray-700 text-center">
                   <p className="text-lg font-semibold text-red-600 dark:text-red-400">No bet recommended.</p>

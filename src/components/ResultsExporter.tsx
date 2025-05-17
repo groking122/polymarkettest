@@ -26,13 +26,37 @@ export default function ResultsExporter({ voters, result }: ResultsExporterProps
   const downloadImage = async () => {
     if (!exportContainerRef.current) return;
     
+    const container = exportContainerRef.current;
+    const originalDisplay = container.style.display;
+    // Store original inline styles of potentially modified elements
+    const elementsToRestore: Array<{element: HTMLElement, originalCSSText: string}> = [];
+
     try {
       setIsGenerating(true);
       
-      // First make the element visible
-      const container = exportContainerRef.current;
-      const originalDisplay = container.style.display;
+      // Make the element visible
       container.style.display = 'block';
+
+      // Apply simpler styles for html2canvas rendering
+      // Override specific Tailwind classes known or suspected to use oklch with their hex/simple equivalents
+      const selectorsAndOverrides = [
+        { selector: '.text-blue-600', style: { color: '#2563eb' } }, // Tailwind blue-600
+        { selector: '.text-gray-500', style: { color: '#6b7280' } }, // Tailwind gray-500
+        { selector: '.text-green-600', style: { color: '#16a34a' } },// Tailwind green-600
+        { selector: '.text-red-600', style: { color: '#dc2626' } },  // Tailwind red-600
+        { selector: '.bg-gray-100', style: { backgroundColor: '#f3f4f6' } }, // Tailwind gray-100
+        { selector: '.bg-gray-50', style: { backgroundColor: '#f9fafb' } },   // Tailwind gray-50
+        { selector: '.border-gray-200', style: { borderColor: '#e5e7eb' } }, // Tailwind gray-200
+        { selector: '.border-gray-300', style: { borderColor: '#d1d5db' } }  // Tailwind gray-300
+      ];
+
+      selectorsAndOverrides.forEach(item => {
+        container.querySelectorAll(item.selector).forEach(el => {
+          const htmlEl = el as HTMLElement;
+          elementsToRestore.push({ element: htmlEl, originalCSSText: htmlEl.style.cssText });
+          Object.assign(htmlEl.style, item.style);
+        });
+      });
       
       // Create the image
       const canvas = await html2canvas(container, {
@@ -42,8 +66,11 @@ export default function ResultsExporter({ voters, result }: ResultsExporterProps
         useCORS: true
       });
       
-      // Reset display
+      // Reset display and styles
       container.style.display = originalDisplay;
+      elementsToRestore.forEach(item => {
+        item.element.style.cssText = item.originalCSSText;
+      });
       
       // Convert to blob
       canvas.toBlob((blob) => {
@@ -66,6 +93,16 @@ export default function ResultsExporter({ voters, result }: ResultsExporterProps
     } catch (err) {
       console.error("Error generating image:", err);
     } finally {
+      // Ensure styles are reset even if an error occurs before explicit reset
+      if (container.style.display !== originalDisplay) {
+        container.style.display = originalDisplay;
+      }
+      elementsToRestore.forEach(item => {
+        // Check if style is still applied, to avoid errors if already reset
+        // This is a bit broad; ideally, check if specific override styles are present
+        // For simplicity, just re-apply original, assuming it won't hurt.
+        item.element.style.cssText = item.originalCSSText;
+      });
       setIsGenerating(false);
     }
   };
