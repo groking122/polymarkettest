@@ -40,7 +40,7 @@ export default function BettingRulesPopup() {
             <strong className="dark:text-white">Recommended Bet Size (Safe Kelly Fraction):</strong><br />
             The calculator uses a cautious approach: <br />
             <code className="bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded font-mono text-sm">Safe Bet % = Min(0.25 × Full Kelly %, 5%)</code> of your bankroll.<br />
-            This means it takes 25% of the full Kelly stake, and further caps the bet at 5% of your total bankroll.
+            This means it takes 25% of the full Kelly stake (quarter Kelly), and further caps the bet at 5% of your total bankroll.
           </li>
           <li className="dark:text-gray-200">
             <strong className="dark:text-white">Full Kelly Formula (Basis):</strong><br />
