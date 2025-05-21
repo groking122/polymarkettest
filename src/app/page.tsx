@@ -11,6 +11,9 @@ export default function Home() {
         <Link href="/vote-gravity-calculator" className="w-full">
           <Button className="text-lg px-6 py-3 w-full">Vote Gravity Calculator</Button>
         </Link>
+        <Link href="/smart-edge" className="w-full">
+          <Button className="text-lg px-6 py-3 w-full">Smart Edge</Button>
+        </Link>
         <Link href="/betting-calculator" className="w-full">
           <Button className="text-lg px-6 py-3 w-full">Kelly Betting Calculator</Button>
         </Link>
