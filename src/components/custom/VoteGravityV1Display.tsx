@@ -66,12 +66,37 @@ export default function VoteGravityV1Display() {
     }
   }, [traders, mounted, marketPrice, bankroll]);
 
+  // Listen for trader updates from V2 calculator
+  useEffect(() => {
+    const handleV2TradersUpdate = (event: any) => {
+      if (event.detail && event.detail.traders) {
+        setTraders(event.detail.traders);
+      }
+    };
+    
+    window.addEventListener('v2-traders-updated', handleV2TradersUpdate);
+    
+    return () => {
+      window.removeEventListener('v2-traders-updated', handleV2TradersUpdate);
+    };
+  }, []);
+
   const addTrader = () => {
-    setTraders([...traders, { name: `Trader ${traders.length + 1}`, sentiment: "yes", smartScore: 0, dollarPosition: 0 }]);
+    const newTrader: Trader = { 
+      name: `Trader ${traders.length + 1}`, 
+      sentiment: "yes", 
+      smartScore: 0, 
+      dollarPosition: 0 
+    };
+    const newTraders = [...traders, newTrader];
+    setTraders(newTraders);
+    syncTradersToV2(newTraders);
   };
 
   const removeTrader = (index: number) => {
-    setTraders(traders.filter((_, i) => i !== index));
+    const newTraders = traders.filter((_, i) => i !== index);
+    setTraders(newTraders);
+    syncTradersToV2(newTraders);
   };
 
   const removeZeroScoreTraders = () => {
@@ -82,6 +107,7 @@ export default function VoteGravityV1Display() {
     }
     const removedCount = traders.length - filteredTraders.length;
     setTraders(filteredTraders);
+    syncTradersToV2(filteredTraders);
     toast.success(`Removed ${removedCount} trader${removedCount > 1 ? 's' : ''} with zero smart scores`);
   };
 
@@ -101,6 +127,15 @@ export default function VoteGravityV1Display() {
       [field]: processedValue
     };
     setTraders(updated);
+    syncTradersToV2(updated);
+  };
+
+  // Helper function to sync traders to V2 calculator
+  const syncTradersToV2 = (traderList: Trader[]) => {
+    const customEvent = new CustomEvent('v1-traders-updated', { 
+      detail: { traders: traderList } 
+    });
+    window.dispatchEvent(customEvent);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, sentiment: 'yes' | 'no') => {
@@ -123,6 +158,10 @@ export default function VoteGravityV1Display() {
         const newTradersList = [...otherSentimentTraders, ...parsedTraders];
 
         setTraders(newTradersList);
+        
+        // Dispatch custom event to notify other components about new traders
+        syncTradersToV2(newTradersList);
+        
         toast.success(`${sentiment.toUpperCase()} sentiment CSV file uploaded and traders updated.`);
       } catch (error) {
         console.error('Error processing file:', error);

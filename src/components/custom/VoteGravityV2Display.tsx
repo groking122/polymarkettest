@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   calculateGravityKellyV2,
   type Trader,
@@ -41,19 +41,6 @@ import {
 } from "@/components/ui/accordion";
 import { Trash2, PlusCircle, AlertCircle, Loader2 } from "lucide-react";
 
-// Example Trader Sets for quick population
-const EXAMPLE_YES_TRADERS: Trader[] = [
-  { name: "YesAlpha", sentiment: "yes", smartScore: 82, dollarPosition: 1200 },
-  { name: "YesBeta", sentiment: "yes", smartScore: 75, dollarPosition: 800 },
-  { name: "YesGamma", sentiment: "yes", smartScore: 88, dollarPosition: 2000 },
-];
-
-const EXAMPLE_NO_TRADERS: Trader[] = [
-  { name: "NoDelta", sentiment: "no", smartScore: 78, dollarPosition: 900 },
-  { name: "NoEpsilon", sentiment: "no", smartScore: 68, dollarPosition: 1500 },
-  { name: "NoZeta", sentiment: "no", smartScore: 81, dollarPosition: 700 },
-];
-
 export default function VoteGravityV2Display() {
   // State for individual trader inputs
   const [currentTraderName, setCurrentTraderName] = useState<string>("");
@@ -61,8 +48,26 @@ export default function VoteGravityV2Display() {
   const [currentTraderSmartScore, setCurrentTraderSmartScore] = useState<string>("");
   const [currentTraderDollarPosition, setCurrentTraderDollarPosition] = useState<string>("");
 
-  // State for the list of traders
-  const [traders, setTraders] = useState<Trader[]>([]);
+  // State for the list of traders - initialize with the same traders as V1
+  const [traders, setTraders] = useState<Trader[]>([
+    { name: "Trader 1", sentiment: "yes", smartScore: 75, dollarPosition: 1000 },
+    { name: "Trader 2", sentiment: "no", smartScore: 60, dollarPosition: 500 },
+  ]);
+  
+  // Listen for trader updates from V1 calculator
+  useEffect(() => {
+    const handleV1TradersUpdate = (event: any) => {
+      if (event.detail && event.detail.traders) {
+        setTraders(event.detail.traders);
+      }
+    };
+    
+    window.addEventListener('v1-traders-updated', handleV1TradersUpdate);
+    
+    return () => {
+      window.removeEventListener('v1-traders-updated', handleV1TradersUpdate);
+    };
+  }, []);
 
   // State for global market parameters
   const [marketPrice, setMarketPrice] = useState<string>("50");
@@ -84,6 +89,14 @@ export default function VoteGravityV2Display() {
   const [minConfidence, setMinConfidence] = useState<string>(""); // e.g. "0.3"
   const [minEdge, setMinEdge] = useState<string>(""); // e.g. "0.05"
   const [maxPositionSizePct, setMaxPositionSizePct] = useState<string>(""); // e.g. "0.05" for 5%
+
+  // Helper function to sync traders to V1 calculator
+  const syncTradersToV1 = (traderList: Trader[]) => {
+    const customEvent = new CustomEvent('v2-traders-updated', { 
+      detail: { traders: traderList } 
+    });
+    window.dispatchEvent(customEvent);
+  };
 
   const handleAddTrader = () => {
     setError(null);
@@ -109,23 +122,20 @@ export default function VoteGravityV2Display() {
       smartScore: smartScoreNum,
       dollarPosition: dollarPositionNum,
     };
-    setTraders([...traders, newTrader]);
+    const newTraders = [...traders, newTrader];
+    setTraders(newTraders);
+    syncTradersToV1(newTraders);
+    
     setCurrentTraderName("");
     setCurrentTraderSentiment("yes");
     setCurrentTraderSmartScore("");
     setCurrentTraderDollarPosition("");
   };
 
-  const handleAddExampleYesTraders = () => {
-    setTraders(prevTraders => [...prevTraders, ...EXAMPLE_YES_TRADERS.map(t => ({...t}))]); // Add copies to avoid issues if these constants were mutable
-  };
-
-  const handleAddExampleNoTraders = () => {
-    setTraders(prevTraders => [...prevTraders, ...EXAMPLE_NO_TRADERS.map(t => ({...t}))]);
-  };
-
   const handleRemoveTrader = (index: number) => {
-    setTraders(traders.filter((_, i) => i !== index));
+    const newTraders = traders.filter((_, i) => i !== index);
+    setTraders(newTraders);
+    syncTradersToV1(newTraders);
   };
 
   const removeZeroScoreTraders = () => {
@@ -137,6 +147,7 @@ export default function VoteGravityV2Display() {
     }
     const removedCount = traders.length - filteredTraders.length;
     setTraders(filteredTraders);
+    syncTradersToV1(filteredTraders);
     alert(`Removed ${removedCount} trader${removedCount > 1 ? 's' : ''} with zero smart scores`);
   };
 
@@ -530,15 +541,6 @@ export default function VoteGravityV2Display() {
             </div>
             <Button onClick={handleAddTrader} className="w-full lg:w-auto">
               <PlusCircle className="mr-2 h-4 w-4" /> Add Trader
-            </Button>
-          </div>
-
-          <div className="mt-4 pt-4 border-t grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button onClick={handleAddExampleYesTraders} variant="outline" size="sm">
-              Load Example YES Traders
-            </Button>
-            <Button onClick={handleAddExampleNoTraders} variant="outline" size="sm">
-              Load Example NO Traders
             </Button>
           </div>
 

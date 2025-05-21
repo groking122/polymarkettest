@@ -7,6 +7,7 @@ const navLinks = [
   { href: '/', label: 'Home' },
   { href: '/vote-gravity-calculator', label: 'Vote Gravity' },
   { href: '/vote-gravity-calculator-v2', label: 'Vote Gravity v2' },
+  { href: '/vote-gravity-calculator-v1.2', label: 'Smart Edge v1.2' },
   { href: '/betting-calculator', label: 'Kelly Betting' },
   { href: '/hedge-calculator', label: 'Hedge Calculator' },
 ];
