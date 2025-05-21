@@ -34,6 +34,22 @@ const HEADER_MAPPINGS: { [key: string]: string } = {
   'user id': 'name'
 };
 
+// Add this helper function for sanitizing numeric values
+function sanitizeNumericValue(value: string): number {
+  // Remove all non-numeric characters except the first decimal point
+  let result = value.replace(/[^\d.-]/g, '');
+  
+  // Handle multiple decimals - keep only the first decimal point
+  const firstDecimal = result.indexOf('.');
+  if (firstDecimal !== -1) {
+    const beforeDecimal = result.substring(0, firstDecimal + 1);
+    const afterDecimal = result.substring(firstDecimal + 1).replace(/\./g, '');
+    result = beforeDecimal + afterDecimal;
+  }
+  
+  return parseFloat(result);
+}
+
 // Fallback CSV parsing without AI
 function fallbackParseCSV(csvContent: string, sentiment: 'yes' | 'no'): Trader[] {
   console.log('Using fallback CSV parsing');
@@ -154,16 +170,40 @@ export async function parseTraderCSV(csvContent: string, sentiment: 'yes' | 'no'
         }
       }
 
-      const smartScore = Number(values[smartScoreIndex]);
-      if (isNaN(smartScore) || smartScore < -100 || smartScore > 100) {
-        throw new Error(`Invalid smart score in row ${index + 2}: ${values[smartScoreIndex]}. Must be between -100 and 100.`);
+      // Validate and sanitize smart score
+      const rawSmartScore = values[smartScoreIndex];
+      let smartScore: number;
+      
+      try {
+        smartScore = sanitizeNumericValue(rawSmartScore);
+        if (isNaN(smartScore)) {
+          throw new Error(`Invalid smart score format: ${rawSmartScore}`);
+        }
+      } catch (error) {
+        console.error(`Error parsing smart score '${rawSmartScore}' in row ${index + 2}, defaulting to 0`);
+        smartScore = 0;
       }
+      
+      // Enforce limits
+      smartScore = Math.max(-100, Math.min(100, smartScore));
       trader.smartScore = smartScore;
 
-      const position = Number(values[positionIndex]);
-      if (isNaN(position) || position < 0) {
-        throw new Error(`Invalid position value in row ${index + 2}: ${values[positionIndex]}. Must be a non-negative number.`);
+      // Validate and sanitize position
+      const rawPosition = values[positionIndex];
+      let position: number;
+      
+      try {
+        position = sanitizeNumericValue(rawPosition);
+        if (isNaN(position)) {
+          throw new Error(`Invalid position format: ${rawPosition}`);
+        }
+      } catch (error) {
+        console.error(`Error parsing position '${rawPosition}' in row ${index + 2}, defaulting to 0`);
+        position = 0;
       }
+      
+      // Ensure position is non-negative
+      position = Math.max(0, position);
       trader.dollarPosition = position;
 
       return trader;
