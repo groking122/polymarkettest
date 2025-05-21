@@ -58,4 +58,4 @@ export function calculateArbitrageStrategy({
     takeProfitTarget: Math.min(takeProfitTarget, 1),
     stopLossLimit: Math.max(stopLossLimit, 0),
   };
-} 
+}

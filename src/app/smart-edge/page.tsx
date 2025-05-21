@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Upload, Download, ChevronDown, ChevronUp, FileDown, HelpCircle, ImageIcon, FileIcon } from "lucide-react";
+import { Trash2, Upload, Download, ChevronDown, ChevronUp, FileDown, HelpCircle, ImageIcon, FileIcon, AlertTriangle } from "lucide-react";
 import { calculateSmartEdge, calculateArbitrageEdge, type Trader, type SmartEdgeResult, type ArbitrageEdgeResult } from "@/utils/calculateSmartEdge";
 import { parseTraderCSV, generateTraderCSV, getExampleCSV } from "@/utils/csvParserV1.2";
 import { calculateArbitrageStrategy } from "@/utils/calculateArbitrageStrategy";
@@ -18,6 +18,7 @@ import ArbitrageEdgeDisplay from '@/components/ArbitrageEdgeDisplay';
 import ArbitrageStrategyCard from '@/components/ArbitrageStrategyCard';
 import { toast } from "sonner";
 import React from "react";
+import Link from "next/link";
 
 export default function SmartEdgeCalculatorPage() {
   const [mounted, setMounted] = useState(false);
@@ -88,6 +89,7 @@ export default function SmartEdgeCalculatorPage() {
         strategy: arbitrageStrategyType
       });
       
+      console.log("Arbitrage strategy calculated:", strategy);
       setArbitrageStrategy(strategy);
     }
   }, [result, marketPrice, bankroll, mounted, arbitrageStrategyType]);
@@ -360,9 +362,15 @@ export default function SmartEdgeCalculatorPage() {
         <title>Smart Edge</title>
       </Head>
       <h1 className="text-3xl font-bold mb-6 text-center">Smart Edge</h1>
-      <p className="text-gray-500 dark:text-gray-400 mb-6 text-center">
-        Advanced prediction engine with conviction-aware weighted consensus
-      </p>
+      <div className="flex items-center justify-center gap-2 mb-6">
+        <p className="text-gray-500 dark:text-gray-400 text-center">
+          Advanced prediction engine with conviction-aware weighted consensus
+        </p>
+        <Link href="/smart-edge-info" className="text-blue-500 hover:text-blue-700 flex items-center gap-1">
+          <HelpCircle size={16} />
+          <span>How it works</span>
+        </Link>
+      </div>
 
       <Card className="mb-6 shadow-lg">
         <CardHeader className="cursor-pointer" onClick={() => setShowHowItWorks(!showHowItWorks)}>
@@ -505,8 +513,15 @@ export default function SmartEdgeCalculatorPage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Trader Input</CardTitle>
-          <CardDescription>Enter trader details with enhanced metrics for better prediction accuracy</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Trader Input</CardTitle>
+              <CardDescription>Enter trader details with enhanced metrics for better prediction accuracy</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={toggleTraderVisibility}>
+              {showAllTraders ? 'Show Less' : 'Show All'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
@@ -607,9 +622,7 @@ export default function SmartEdgeCalculatorPage() {
             </TableHeader>
             <TableBody>
               {/* Show first 10 traders or all if showAllTraders is true */}
-              {traders
-                .slice(0, showAllTraders ? traders.length : Math.min(10, traders.length))
-                .map((trader, index) => (
+              {(showAllTraders ? traders : traders.slice(0, 5)).map((trader, index) => (
                 <React.Fragment key={`trader-container-${index}`}>
                   <TableRow key={`trader-${index}`}>
                     <TableCell>
@@ -756,20 +769,16 @@ export default function SmartEdgeCalculatorPage() {
                 </React.Fragment>
               ))}
 
-              {/* Show the "Show More/Less" button only when traders > 10 */}
-              {traders.length > 10 && (
+              {/* Show the "Show More/Less" button only when traders > 5 */}
+              {!showAllTraders && traders.length > 5 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-3">
+                  <TableCell colSpan={7} className="text-center p-2">
                     <Button 
                       onClick={toggleTraderVisibility} 
-                      variant="outline"
-                      className="flex items-center gap-2 mx-auto"
+                      variant="ghost" 
+                      className="text-sm text-blue-600 hover:text-blue-800"
                     >
-                      {showAllTraders ? (
-                        <>Collapse List <ChevronUp className="h-4 w-4" /></>
-                      ) : (
-                        <>Show All Traders ({traders.length - 10} more) <ChevronDown className="h-4 w-4" /></>
-                      )}
+                      Show {traders.length - 5} More Traders
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -824,6 +833,21 @@ export default function SmartEdgeCalculatorPage() {
                 />
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Debug Card - Will remove after testing */}
+      <Card className="mb-6 border-4 border-red-500 bg-red-50">
+        <CardHeader>
+          <CardTitle>Debug Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div>
+            <p><strong>Arbitrage Strategy State:</strong> {arbitrageStrategy ? JSON.stringify(arbitrageStrategy) : "No strategy calculated"}</p>
+            <p><strong>Result State:</strong> {result ? "Results calculated" : "No results"}</p>
+            <p><strong>Market Price:</strong> {marketPrice}</p>
+            <p><strong>Bankroll:</strong> {bankroll}</p>
           </div>
         </CardContent>
       </Card>
@@ -1007,18 +1031,45 @@ export default function SmartEdgeCalculatorPage() {
           )}
 
           {/* Arbitrage Strategy Card */}
-          {arbitrageStrategy && (
-            <Card className="mb-6 border-t-4 border-t-purple-500">
-              <CardContent className="pt-6">
+          <Card className="mb-6 border-4 border-purple-500 bg-purple-50 dark:bg-purple-900/20">
+            <CardHeader>
+              <CardTitle className="text-xl text-purple-700 dark:text-purple-300">
+                Advanced Arbitrage Strategy
+                {arbitrageStrategy ? (
+                  <span className="ml-2 text-sm bg-green-100 text-green-800 px-2 py-1 rounded-full">AVAILABLE</span>
+                ) : (
+                  <span className="ml-2 text-sm bg-red-100 text-red-800 px-2 py-1 rounded-full">NOT CALCULATED</span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {arbitrageStrategy ? (
                 <ArbitrageStrategyCard 
                   strategy={arbitrageStrategy}
                   marketPrice={marketPrice}
                   bankroll={bankroll}
                   onStrategyChange={handleStrategyChange}
                 />
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-medium text-yellow-800 dark:text-yellow-400">Strategy Not Available</h3>
+                      <div className="text-sm text-yellow-700 dark:text-yellow-500 mt-1">
+                        Possible causes:
+                        <ul className="list-disc list-inside mt-1">
+                          <li>Calculation hasn't completed yet</li>
+                          <li>Edge is too small (less than 2%)</li>
+                          <li>Confidence is too low (less than 20%)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Edge Distribution Visualization */}
           {result && result.traderInfluences.length > 0 && (

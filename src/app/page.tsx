@@ -163,7 +163,7 @@ export default function Home() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Link href="/vote-gravity-calculator-v1.2" className="w-full">
+                <Link href="/smart-edge" className="w-full">
                   <Button className="w-full justify-between bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 group">
                     <span>Open Smart Edge</span>
                     <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
