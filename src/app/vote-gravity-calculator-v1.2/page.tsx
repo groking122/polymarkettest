@@ -11,10 +11,12 @@ import { Trash2, Upload, Download, ChevronDown, ChevronUp, FileDown, HelpCircle 
 import { calculateSmartEdge, calculateArbitrageEdge, type Trader, type SmartEdgeResult, type ArbitrageEdgeResult } from "@/utils/calculateSmartEdge";
 import { parseTraderCSV, generateTraderCSV, getExampleCSV } from "@/utils/csvParserV1.2";
 import Head from 'next/head';
+import Link from 'next/link';
 import { CrowdProbabilityDisplay } from '@/components/CrowdProbabilityDisplay';
 import TraderVisualization from '@/components/TraderVisualization';
 import ArbitrageEdgeDisplay from '@/components/ArbitrageEdgeDisplay';
 import { toast } from "sonner";
+import React from "react";
 
 export default function SmartEdgeCalculatorPage() {
   const [mounted, setMounted] = useState(false);
@@ -169,9 +171,15 @@ export default function SmartEdgeCalculatorPage() {
         <title>Smart Edge</title>
       </Head>
       <h1 className="text-3xl font-bold mb-6 text-center">Smart Edge</h1>
-      <p className="text-gray-500 dark:text-gray-400 mb-6 text-center">
-        Advanced prediction engine with conviction-aware weighted consensus
-      </p>
+      <div className="flex items-center justify-center gap-2 mb-6">
+        <p className="text-gray-500 dark:text-gray-400 text-center">
+          Advanced prediction engine with conviction-aware weighted consensus
+        </p>
+        <Link href="/smart-edge-info" className="text-blue-500 hover:text-blue-700 flex items-center gap-1">
+          <HelpCircle size={16} />
+          <span>How it works</span>
+        </Link>
+      </div>
 
       <Card className="mb-6 shadow-lg">
         <CardHeader className="cursor-pointer" onClick={() => setShowHowItWorks(!showHowItWorks)}>
@@ -416,8 +424,8 @@ export default function SmartEdgeCalculatorPage() {
             </TableHeader>
             <TableBody>
               {traders.map((trader, index) => (
-                <>
-                  <TableRow key={`trader-${index}`}>
+                <React.Fragment key={`trader-fragment-${index}`}>
+                  <TableRow>
                     <TableCell>
                       <Input
                         type="text"
@@ -505,7 +513,7 @@ export default function SmartEdgeCalculatorPage() {
                   
                   {/* Advanced fields row that shows when expanded */}
                   {trader.showAdvanced && (
-                    <TableRow key={`trader-advanced-${index}`} className="bg-gray-50 dark:bg-gray-800/50">
+                    <TableRow className="bg-gray-50 dark:bg-gray-800/50">
                       <TableCell colSpan={7} className="p-3">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-2">
@@ -559,7 +567,7 @@ export default function SmartEdgeCalculatorPage() {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               ))}
               <TableRow>
                 <TableCell colSpan={7}>
