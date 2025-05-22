@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Head from "next/head";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,13 +24,9 @@ export default function SmartEdgeInfoPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <Head>
-        <title>Smart Edge – How It Works</title>
-      </Head>
-
       <div className="mb-8">
         <div className="flex items-center gap-2">
-          <Link href="/vote-gravity-calculator-v1.2">
+          <Link href="/smart-edge">
             <Button variant="outline" size="sm">← Back to Calculator</Button>
           </Link>
         </div>
@@ -498,62 +493,63 @@ calibratedYesProb = 0.5 + (rawYesProb - 0.5) × confidenceFactor`}
         {expandedSections.changelog && (
           <CardContent className="text-gray-700 dark:text-gray-300">
             <p className="mb-4">
-              This section tracks major updates and improvements to the Smart Edge system over time.
+              All notable changes to the Smart Edge tool will be documented here.
             </p>
-            
-            <div className="border-l-4 border-blue-500 pl-4 mb-8">
-              <h3 className="text-xl font-medium mb-1">v1.4 – Smart Edge Upgrade</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">May 21, 2025</p>
-              
-              <ul className="list-disc pl-5 space-y-2">
-                <li>🧠 Renamed system to <span className="font-medium">Smart Edge</span></li>
-                <li>🔁 Rewrote <span className="font-medium">"How It Works"</span> to reflect true algorithm structure</li>
-                <li className="space-y-2">
-                  ✅ Added full support for <span className="font-medium">enhanced trader metrics</span>:
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Entry Price</li>
-                    <li>Realized PnL</li>
-                    <li>Unrealized PnL</li>
-                    <li>Supply Ownership</li>
-                  </ul>
-                </li>
-                <li>🔀 Replaced top 100 YES/NO symmetry with <span className="font-medium">influence-based selection</span></li>
-                <li>📈 Implemented multi-factor <span className="font-medium">confidence calibration</span></li>
-                <li className="space-y-2">
-                  🔍 Separated and displayed:
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>🎯 Prediction Edge</li>
-                    <li>💸 Arbitrage Edge</li>
-                  </ul>
-                </li>
-                <li>💵 Added <span className="font-medium">conservative Kelly-based bet sizing</span></li>
-                <li className="space-y-2">
-                  ✅ Created <span className="font-medium">Arbitrage Strategy Module</span> with:
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li>Entry threshold</li>
-                    <li>Stake sizing</li>
-                    <li>Take-profit and stop-loss targets</li>
-                  </ul>
-                </li>
-                <li>🖥️ Enhanced trader table UI with expandable <span className="font-medium">Advanced Inputs</span></li>
-                <li>✅ Added user-friendly <span className="font-medium">inputs guide</span> to info page</li>
-              </ul>
-            </div>
-            
-            <div className="border-l-4 border-green-500 pl-4">
-              <h3 className="text-xl font-medium mb-1">Upcoming in v1.5 Beta</h3>
-              
-              <ul className="list-disc pl-5 space-y-2">
-                <li>🧪 <span className="font-medium">Backtest module</span> (upload CSV, track ROI & accuracy)</li>
-                <li>🧠 <span className="font-medium">Bayesian probability update engine</span></li>
-                <li>🧹 <span className="font-medium">Noise suppression filters</span> for low-quality traders</li>
-                <li>📊 <span className="font-medium">Visual analytics</span> (edge sources, signal graphs)</li>
-                <li>🚦 <span className="font-medium">UX guardrails</span> for low-confidence warnings</li>
-              </ul>
+            <div className="space-y-6">
+              <div>
+                <h3 className="font-medium text-lg">May 22, 2025 (Current Version)</h3>
+                <ul className="list-disc pl-5 space-y-1 mt-2">
+                  <li>
+                    <strong>Consolidation & Refinement:</strong> Streamlined calculator versions. The Smart Edge page (`/smart-edge`) is now the primary, most advanced calculator, superseding `vote-gravity-calculator-v1.2`.
+                  </li>
+                  <li>
+                    <strong>Advanced Arbitrage Strategy Live:</strong> Fully integrated the "Advanced Arbitrage Strategy" card on the Smart Edge page. This includes:
+                    <ul className="list-disc pl-5 space-y-0.5 mt-1">
+                      <li>Selectable Kelly criterion fractions (Conservative 25%, Standard 50%, Aggressive 100%).</li>
+                      <li>Calculated take profit (115% of entry) and stop loss (90% of entry) targets.</li>
+                      <li>Clear display of recommended direction, edge, and stake.</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Navigation Overhaul:</strong> Corrected all navigation links in the header and on the home page to ensure "Smart Edge" now correctly points to the `/smart-edge` route.
+                  </li>
+                  <li>
+                    <strong>Home Page Redesign:</strong> Implemented a new two-column layout for the home page, featuring organized cards for prediction tools and the Smart Edge suite with enhanced UI/UX.
+                  </li>
+                  <li>
+                    <strong>Bug Fixes & Enhancements:</strong>
+                    <ul className="list-disc pl-5 space-y-0.5 mt-1">
+                      <li>Fixed React key errors in the trader input table on the Smart Edge page.</li>
+                      <li>Resolved HTML nesting error (`&lt;ul&gt;` inside `&lt;p&gt;`) that caused hydration issues on the Smart Edge page.</li>
+                      <li>Restored PDF/PNG download functionality and trader visibility toggle (show less/more) to the Smart Edge page.</li>
+                      <li>Added "How it works" link from Smart Edge calculator to this info page.</li>
+                      <li>Improved visibility of the Advanced Arbitrage Strategy card using borders and conditional messaging.</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Documentation Hub:</strong> This Smart Edge Info page was created to provide comprehensive details on the calculator's inputs, model, output interpretation, and usage strategies.
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-lg">May 20, 2025</h3>
+                <ul className="list-disc pl-5 space-y-1 mt-2">
+                  <li>Initial beta release of Smart Edge (formerly Vote Gravity v1.2).</li>
+                  <li>Core features: conviction-weighted probability, dual edge calculation (prediction and arbitrage), basic betting recommendations.</li>
+                  <li>CSV upload/download for trader data.</li>
+                </ul>
+              </div>
+
+              {/* Add more changelog entries here as the tool evolves */}
             </div>
           </CardContent>
         )}
       </Card>
+
+      <div className="mt-12 text-center">
+        {/* ... existing code ... */}
+      </div>
     </div>
   );
-} 
+}
