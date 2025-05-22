@@ -36,7 +36,7 @@ export async function parseTraderCSV(csvContent: string, defaultSentiment: 'yes'
       const entryPriceColumn = findColumn(firstRow, ['entry', 'entry price', 'entryprice', 'price', 'market price', 'marketprice', 'entry point']);
       const realizedPnlColumn = findColumn(firstRow, ['realized', 'realized pnl', 'realizedpnl', 'realized profit', 'profit', 'gains', 'closed pnl']);
       const unrealizedPnlColumn = findColumn(firstRow, ['unrealized', 'unrealized pnl', 'unrealizedpnl', 'unrealized profit', 'open profit', 'open pnl', 'paper profit']);
-      const supplyOwnershipColumn = findColumn(firstRow, ['supply', 'ownership', 'supply ownership', 'supplyownership', 'market share', 'share', 'percent owned', 'ownership percent']);
+      const supplyOwnershipColumn = findColumn(firstRow, ['supply', 'ownership', 'supply ownership', 'supplyownership', 'market share', 'share', 'percent owned', 'ownership percent', 'pct', 'percentage', 'percent']);
       
       console.log('Detected columns:', { 
         nameColumn, 
@@ -209,7 +209,7 @@ export function generateTraderCSV(traders: Trader[]): string {
     'Entry Price (%)', 
     'Realized PnL', 
     'Unrealized PnL',
-    'Supply Ownership (%)',
+    'pct',
     'Sentiment'
   ];
   
@@ -241,7 +241,7 @@ export function getExampleCSV(sentiment: 'yes' | 'no'): string {
     'Entry Price (%)', 
     'Realized PnL', 
     'Unrealized PnL',
-    'Supply Ownership (%)', 
+    'pct (Supply Ownership)', 
     'Sentiment'
   ];
   

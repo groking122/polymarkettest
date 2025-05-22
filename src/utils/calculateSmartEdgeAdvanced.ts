@@ -1,6 +1,11 @@
+/**
+ * Smart Edge Calculator
+ * Advanced version with configurable classic and advanced calculation modes
+ */
+
 import { activeConfig, logPnl, clamp, logistic } from './smartEdgeConfig';
 
-import { activeConfig, logPnl, clamp, logistic } from './smartEdgeConfig';export interface Trader {
+export interface Trader {
   name?: string;
   sentiment: 'yes' | 'no';
   smartScore: number;
@@ -87,8 +92,7 @@ export interface ArbitrageEdgeResult {
   hasEdge: boolean;
 }
 
-// Constants - keep these for backward compatibility but use activeConfig in code
-const SCORE_EMPHASIS_FACTOR = activeConfig.scoreEmphasisFactor;
+// Constants
 const SMART_SCORE_THRESHOLD = 70;  // Threshold for considering traders as "smart"
 const EPSILON = 1e-9;             // Small value to avoid division by zero
 const Z_SCORE_95 = 1.96;          // Z-score for 95% confidence interval
@@ -137,7 +141,88 @@ function calculateErrorMargin(traders: Trader[], probability: number): number {
   return Math.min(margin, 0.2);
 }
 
-/** * Compute weighted influence for a trader based on advanced metrics * @param trader The trader object * @param marketPrice Current market price (0-1) * @returns Weighted influence score (positive for YES, negative for NO) */function computeWeightedInfluence(trader: Trader, marketPrice: number): number {  // Calculate score weight based on mode  let scoreWeight: number;  if (activeConfig.useAdvancedMode) {    // Advanced mode: logarithmic scaling to prevent exponential blowout    scoreWeight = Math.log(1 + trader.smartScore);  } else {    // Classic mode: exponential score weight    scoreWeight = Math.exp(trader.smartScore / activeConfig.scoreEmphasisFactor);  }    // Calculate PnL multiplier based on mode  let pnlMultiplier: number;  if (activeConfig.useAdvancedMode) {    // Advanced mode: logarithmic PnL scaling    pnlMultiplier = 1 +       0.5 * logPnl(trader.realizedPnl || 0) +      0.5 * logPnl(trader.unrealizedPnl || 0);  } else {    // Classic mode: tanh PnL scaling    pnlMultiplier = 1 +       0.5 * Math.tanh((trader.realizedPnl || 0) / activeConfig.pnlScalingFactor) +      0.5 * Math.tanh((trader.unrealizedPnl || 0) / activeConfig.pnlScalingFactor);  }    // Entry price advantage - rewards traders who got better entry  let entryMultiplier = 1;  if (trader.entryPrice !== undefined) {    const entryPrice = trader.entryPrice;    const entryAdvantage = trader.sentiment === 'yes'       ? (marketPrice - entryPrice) / Math.max(marketPrice, EPSILON)       : (entryPrice - marketPrice) / Math.max(entryPrice, EPSILON);        if (activeConfig.useAdvancedMode) {      // Advanced mode: apply thresholded entry advantage with clamping      // This avoids penalizing "late but smart" entries      if (Math.abs(entryAdvantage) < 0.01) {        entryMultiplier = 1; // Negligible advantage, neutral effect      } else {        entryMultiplier = 1 + activeConfig.entryAdvantageMultiplier *           clamp(entryAdvantage, -0.05, 0.05); // Clamp to avoid extreme effects      }    } else {      // Classic mode: linear entry advantage scaling      entryMultiplier = 1 + activeConfig.entryAdvantageMultiplier *         Math.max(-0.5, Math.min(1, entryAdvantage));    }  }    // Supply ownership multiplier - rewards whales  const supplyMultiplier = (trader.supplyOwnership && trader.supplyOwnership >= 0.05) ? 1.2 : 1;    // Base weight calculation  let baseWeight: number;  if (activeConfig.useAdvancedMode) {    // Advanced mode: position size with logarithmic dampening for large positions    baseWeight = trader.dollarPosition * (1 + Math.log10(1 + trader.dollarPosition/1000)/10) * scoreWeight;  } else {    // Classic mode: simple position size * score weight    baseWeight = trader.dollarPosition * scoreWeight;  }    // Final weighted influence calculation  const finalWeight = baseWeight * pnlMultiplier * entryMultiplier * supplyMultiplier;    // Return signed influence (positive for YES, negative for NO)  return trader.sentiment === 'yes' ? finalWeight : -finalWeight;}
+/**
+ * Compute weighted influence for a trader based on advanced metrics
+ * @param trader The trader object
+ * @param marketPrice Current market price (0-1)
+ * @returns Weighted influence score (positive for YES, negative for NO)
+ */
+function computeWeightedInfluence(trader: Trader, marketPrice: number): number {
+  // Calculate score weight based on mode
+  let scoreWeight: number;
+  if (activeConfig.useAdvancedMode) {
+    // Advanced mode: logarithmic scaling to prevent exponential blowout
+    // Handle negative scores by taking log of absolute value and preserving sign
+    const absScore = Math.abs(trader.smartScore);
+    if (absScore < 0.00001) { // Very close to zero, use small positive value
+      scoreWeight = 0.001;
+    } else {
+      // Use Math.log1p (log(1+x)) for better numerical stability
+      const logValue = Math.log1p(absScore);
+      scoreWeight = trader.smartScore >= 0 ? logValue : -logValue;
+    }
+  } else {
+    // Classic mode: exponential score weight
+    scoreWeight = Math.exp(trader.smartScore / activeConfig.scoreEmphasisFactor);
+  }
+  
+  // Calculate PnL multiplier based on mode
+  let pnlMultiplier: number;
+  if (activeConfig.useAdvancedMode) {
+    // Advanced mode: logarithmic PnL scaling
+    pnlMultiplier = 1 + 
+      0.5 * logPnl(trader.realizedPnl || 0) +
+      0.5 * logPnl(trader.unrealizedPnl || 0);
+  } else {
+    // Classic mode: tanh PnL scaling
+    pnlMultiplier = 1 + 
+      0.5 * Math.tanh((trader.realizedPnl || 0) / activeConfig.pnlScalingFactor) +
+      0.5 * Math.tanh((trader.unrealizedPnl || 0) / activeConfig.pnlScalingFactor);
+  }
+  
+  // Entry price advantage - rewards traders who got better entry
+  let entryMultiplier = 1;
+  if (trader.entryPrice !== undefined) {
+    const entryPrice = trader.entryPrice;
+    const entryAdvantage = trader.sentiment === 'yes' 
+      ? (marketPrice - entryPrice) / Math.max(marketPrice, EPSILON) 
+      : (entryPrice - marketPrice) / Math.max(entryPrice, EPSILON);
+    
+    if (activeConfig.useAdvancedMode) {
+      // Advanced mode: apply thresholded entry advantage with clamping
+      // This avoids penalizing "late but smart" entries
+      if (Math.abs(entryAdvantage) < 0.01) {
+        entryMultiplier = 1; // Negligible advantage, neutral effect
+      } else {
+        entryMultiplier = 1 + activeConfig.entryAdvantageMultiplier * 
+          clamp(entryAdvantage, -0.05, 0.05); // Clamp to avoid extreme effects
+      }
+    } else {
+      // Classic mode: linear entry advantage scaling
+      entryMultiplier = 1 + activeConfig.entryAdvantageMultiplier * 
+        Math.max(-0.5, Math.min(1, entryAdvantage));
+    }
+  }
+  
+  // Supply ownership multiplier - rewards whales
+  const supplyMultiplier = (trader.supplyOwnership && trader.supplyOwnership >= 0.05) ? 1.2 : 1;
+  
+  // Base weight calculation
+  let baseWeight: number;
+  if (activeConfig.useAdvancedMode) {
+    // Advanced mode: position size with logarithmic dampening for large positions
+    baseWeight = trader.dollarPosition * (1 + Math.log10(1 + trader.dollarPosition/1000)/10) * scoreWeight;
+  } else {
+    // Classic mode: simple position size * score weight
+    baseWeight = trader.dollarPosition * scoreWeight;
+  }
+  
+  // Final weighted influence calculation
+  const finalWeight = baseWeight * pnlMultiplier * entryMultiplier * supplyMultiplier;
+  
+  // Return signed influence (positive for YES, negative for NO)
+  return trader.sentiment === 'yes' ? finalWeight : -finalWeight;
+}
 
 export function calculateSmartEdge(traders: Trader[], marketPrice: number = 50, bankroll: number = 100): SmartEdgeResult {
   // Handle empty traders case
@@ -211,12 +296,17 @@ export function calculateSmartEdge(traders: Trader[], marketPrice: number = 50, 
                     (smartYesCapital + smartNoCapital + EPSILON);
 
   // Step 5: Calculate weighted gravity score
-  const sumWeights = rawWeights.reduce((sum, w) => sum + w, 0);
-  const sumAbsWeights = rawWeights.reduce((sum, w) => sum + Math.abs(w), 0);
-  const gravitySmart = sumWeights / (sumAbsWeights + EPSILON);
+  const sumWeights = rawWeights.reduce((sum, weight) => sum + weight, 0);
+  const sumAbsWeights = rawWeights.reduce((sum, weight) => sum + Math.abs(weight), 0);
+  const gravitySmart = sumAbsWeights < EPSILON ? 0 : sumWeights / sumAbsWeights;
   
   // Step 6: Calculate raw Yes probability
-  const rawYesProb = (gravitySmart + 1) / 2;
+  let rawYesProb = (gravitySmart + 1) / 2;
+  // Check for NaN or invalid values
+  if (isNaN(rawYesProb) || rawYesProb < 0 || rawYesProb > 1) {
+    console.warn("Invalid rawYesProb calculated:", rawYesProb, "using default 0.5");
+    rawYesProb = 0.5;
+  }
   
   // Step 7: Calculate average smart score (for confidence)
   const avgSmartScore = topTraders.reduce((sum, t) => 
@@ -236,11 +326,28 @@ export function calculateSmartEdge(traders: Trader[], marketPrice: number = 50, 
     sum + Math.pow(t.dollarPosition / totalCapital, 2), 0);
   const concentrationConfidence = Math.min(1, herfindahlIndex * 10); // Scale up for better range
   
-  // Combined confidence factor
-  const confidenceFactor = 0.5 * smartSkewConfidence + 0.3 * scoreConfidence + 0.2 * concentrationConfidence;
+  // Combined confidence factor with configurable weights
+  const rawConfidenceFactor = 
+    activeConfig.smartSkewWeight * smartSkewConfidence + 
+    activeConfig.scoreConfidenceWeight * scoreConfidence + 
+    activeConfig.concentrationWeight * concentrationConfidence;
+  
+  // Apply non-linear confidence scaling in advanced mode
+  let confidenceFactor: number;
+  if (activeConfig.useAdvancedMode) {
+    // Advanced mode: apply power scaling for better mid-range differentiation
+    confidenceFactor = Math.pow(rawConfidenceFactor, activeConfig.confidenceExponent);
+  } else {
+    confidenceFactor = rawConfidenceFactor;
+  }
   
   // Step 9: Calculate calibrated yes probability
-  const calibratedYesProb = 0.5 + (rawYesProb - 0.5) * confidenceFactor;
+  let calibratedYesProb = 0.5 + (rawYesProb - 0.5) * confidenceFactor;
+  // Check for NaN or invalid values
+  if (isNaN(calibratedYesProb) || calibratedYesProb < 0 || calibratedYesProb > 1) {
+    console.warn("Invalid calibratedYesProb calculated:", calibratedYesProb, "using fallback value");
+    calibratedYesProb = rawYesProb; // Use rawYesProb as fallback
+  }
   
   // Determine confidence level based on confidence factor
   const confidenceLevel = getConfidenceLevel(confidenceFactor * 100);
@@ -256,13 +363,28 @@ export function calculateSmartEdge(traders: Trader[], marketPrice: number = 50, 
   
   // Calculate normalized influence for each trader
   const traderInfluences: TraderInfluence[] = topTraders.map((trader) => {
+    // Calculate influence percentage safely
+    let influencePercent = 0;
+    if (sumAbsWeights > EPSILON) {
+      influencePercent = (Math.abs(trader.weightedInfluence) / sumAbsWeights) * 100;
+    } else if (trader.weightedInfluence !== 0) {
+      // If sum is near zero but this trader has influence, give them 100%
+      influencePercent = 100;
+    }
+    
+    // Check for NaN
+    if (isNaN(influencePercent)) {
+      console.warn("NaN influencePercent detected for trader", trader.name);
+      influencePercent = 0;
+    }
+    
     return {
       name: trader.name || `Trader ${topTraders.indexOf(trader) + 1}`,
       smartScore: trader.smartScore,
       dollarPosition: trader.dollarPosition,
       sentiment: trader.sentiment,
       weight: trader.weightedInfluence,
-      influencePercent: (Math.abs(trader.weightedInfluence) / (sumAbsWeights + EPSILON)) * 100,
+      influencePercent: influencePercent,
       entryPrice: trader.entryPrice,
       realizedPnl: trader.realizedPnl,
       unrealizedPnl: trader.unrealizedPnl,
@@ -357,11 +479,21 @@ export function calculateKellyBetting(
     // For yes bets: edge / (odds - 1)
     // For no bets: |edge| / (odds - 1)
     const odds = betSide === 'yes' ? 1 / marketProb : 1 / (1 - marketProb);
-    kellyFraction = Math.abs(edge) / (odds - 1);
+    
+    if (activeConfig.useAdvancedMode) {
+      // Advanced mode: apply squared edge scaling for small edges
+      // This prevents overbetting on small edges
+      const edgeSquared = Math.abs(edge) < 0.05 ? 
+        Math.pow(Math.abs(edge), 1.5) : Math.abs(edge);
+      kellyFraction = edgeSquared / (odds - 1);
+    } else {
+      // Classic mode: standard Kelly calculation
+      kellyFraction = Math.abs(edge) / (odds - 1);
+    }
   }
   
-  // Quarter Kelly for safety
-  const safeKellyFraction = kellyFraction * 0.25;
+  // Apply configurable Kelly fraction
+  const safeKellyFraction = kellyFraction * activeConfig.kellyFraction;
   
   // Determine bet confidence based on confidence score
   let betConfidence: 'high' | 'medium' | 'low' | 'none';
@@ -392,7 +524,7 @@ export function calculateKellyBetting(
   }
   
   // Determine if the bet should be placed
-  const edgeThreshold = 0.15; // 15% minimum edge (increased from original)
+  const edgeThreshold = activeConfig.minimumPredictionEdge;
   const shouldBet = Math.abs(edge) >= edgeThreshold && 
                    betConfidence !== 'none' && 
                    safeKellyFraction > 0;
@@ -452,13 +584,13 @@ export function deriveOptimalStrategy(
   
   if (confidenceLevel.includes("High")) {
     maximumRisk = 0.10; // 10% of bankroll
-    edgeThreshold = 0.15; // 15% minimum edge (increased from original)
+    edgeThreshold = 0.15; // 15% minimum edge
   } else if (confidenceLevel.includes("Medium")) {
     maximumRisk = 0.05; // 5% of bankroll
-    edgeThreshold = 0.20; // 20% minimum edge (increased from original)
+    edgeThreshold = 0.20; // 20% minimum edge
   } else {
     maximumRisk = 0.02; // 2% of bankroll
-    edgeThreshold = 0.25; // 25% minimum edge (increased from original)
+    edgeThreshold = 0.25; // 25% minimum edge
   }
   
   // Determine if we should bet based on strategy rules
@@ -498,13 +630,19 @@ export function calculateArbitrageEdge(
   smartEstimate: number, 
   marketPrice: number, 
   bankroll: number = 100,
-  kellyFraction: number = 0.25 // Quarter Kelly by default
+  kellyFraction: number = activeConfig.kellyFraction // Use configurable Kelly fraction
 ): ArbitrageEdgeResult {
   // Convert to probabilities (0-1 scale)
   const marketYesProb = marketPrice / 100;
   const marketNoProb = 1 - marketYesProb;
   
-  const smartYesProb = smartEstimate;
+  // Check for invalid smartEstimate values
+  let smartYesProb = smartEstimate;
+  if (isNaN(smartYesProb) || smartYesProb < 0 || smartYesProb > 1) {
+    console.warn("Invalid smartEstimate in arbitrage calculation:", smartEstimate, "using market price as fallback");
+    smartYesProb = marketYesProb; // Use market price as fallback
+  }
+  
   const smartNoProb = 1 - smartYesProb;
   
   // Calculate edge per side
@@ -518,15 +656,31 @@ export function calculateArbitrageEdge(
   let betDirection: 'yes' | 'no' | 'none' = 'none';
   let edge = 0;
   
-  // Only bet if the edge is at least 2%
-  const EDGE_THRESHOLD = 0.02;
+  // Edge threshold from configuration
+  const EDGE_THRESHOLD = activeConfig.minimumArbitrageEdge;
   
-  if (yesEdge > EDGE_THRESHOLD && yesEdge > noEdge) {
-    betDirection = 'yes';
-    edge = yesEdge;
-  } else if (noEdge > EDGE_THRESHOLD && noEdge > yesEdge) {
-    betDirection = 'no';
-    edge = noEdge;
+  if (activeConfig.useAdvancedMode) {
+    // Advanced mode: use logistic function for smoother edge detection
+    // This creates a more gradual transition rather than a hard cutoff
+    
+    if (yesEdge > 0 && yesEdge > noEdge) {
+      betDirection = 'yes';
+      // Apply logistic scaling for smoothed edge
+      edge = yesEdge * logistic(yesEdge, 20, EDGE_THRESHOLD);
+    } else if (noEdge > 0 && noEdge > yesEdge) {
+      betDirection = 'no';
+      // Apply logistic scaling for smoothed edge
+      edge = noEdge * logistic(noEdge, 20, EDGE_THRESHOLD);
+    }
+  } else {
+    // Classic mode: use hard threshold
+    if (yesEdge > EDGE_THRESHOLD && yesEdge > noEdge) {
+      betDirection = 'yes';
+      edge = yesEdge;
+    } else if (noEdge > EDGE_THRESHOLD && noEdge > yesEdge) {
+      betDirection = 'no';
+      edge = noEdge;
+    }
   }
   
   // Calculate Kelly stake

@@ -8,7 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Trash2, Upload, Download, ChevronDown, ChevronUp, FileDown, HelpCircle, ImageIcon, FileIcon, AlertTriangle } from "lucide-react";
-import { calculateSmartEdge, calculateArbitrageEdge, type Trader, type SmartEdgeResult, type ArbitrageEdgeResult } from "@/utils/calculateSmartEdge";
+import { 
+  calculateSmartEdge, 
+  calculateArbitrageEdge, 
+  type Trader, 
+  type SmartEdgeResult, 
+  type ArbitrageEdgeResult 
+} from "@/utils/calculateSmartEdgeAdvanced";
+import { setCalculationMode, activeConfig } from "@/utils/smartEdgeConfig";
 import { parseTraderCSV, generateTraderCSV, getExampleCSV } from "@/utils/csvParserV1.2";
 import { calculateArbitrageStrategy } from "@/utils/calculateArbitrageStrategy";
 import Head from 'next/head';
@@ -16,6 +23,7 @@ import { CrowdProbabilityDisplay } from '@/components/CrowdProbabilityDisplay';
 import TraderVisualization from '@/components/TraderVisualization';
 import ArbitrageEdgeDisplay from '@/components/ArbitrageEdgeDisplay';
 import ArbitrageStrategyCard from '@/components/ArbitrageStrategyCard';
+import SmartEdgeConfigSwitch from '@/components/SmartEdgeConfigSwitch';
 import { toast } from "sonner";
 import React from "react";
 import Link from "next/link";
@@ -65,37 +73,53 @@ export default function SmartEdgeCalculatorPage() {
 
   useEffect(() => {
     if (mounted && traders.length > 0) {
-      const calculation = calculateSmartEdge(traders, marketPrice, bankroll);
-      setResult(calculation);
-      
-      // Calculate arbitrage edge
-      const arbitrage = calculateArbitrageEdge(
-        calculation.calibratedYesProb, 
-        marketPrice, 
-        bankroll,
-        0.25 // Quarter Kelly
-      );
-      setArbitrageEdge(arbitrage);
+      try {
+        // Sanitize inputs to ensure valid calculations
+        const validTraders = traders.map(trader => ({
+          ...trader,
+          name: trader.name || `Trader ${traders.indexOf(trader) + 1}`,
+          smartScore: Number(trader.smartScore) || 0,
+          dollarPosition: Number(trader.dollarPosition) || 0,
+          entryPrice: trader.entryPrice !== undefined ? Number(trader.entryPrice) : marketPrice / 100,
+          realizedPnl: trader.realizedPnl !== undefined ? Number(trader.realizedPnl) : 0,
+          unrealizedPnl: trader.unrealizedPnl !== undefined ? Number(trader.unrealizedPnl) : 0,
+          supplyOwnership: trader.supplyOwnership !== undefined ? Number(trader.supplyOwnership) : 0
+        }));
+        
+        // Perform calculations with sanitized data
+        const calculation = calculateSmartEdge(validTraders, marketPrice, bankroll);
+        setResult(calculation);
+        
+        // Calculate arbitrage edge
+        if (calculation.calibratedYesProb !== undefined && !isNaN(calculation.calibratedYesProb)) {
+          const arbitrage = calculateArbitrageEdge(
+            calculation.calibratedYesProb, 
+            marketPrice, 
+            bankroll,
+            0.25 // Quarter Kelly
+          );
+          setArbitrageEdge(arbitrage);
+          
+          // Recalculate arbitrage strategy
+          const strategy = calculateArbitrageStrategy({
+            smartYesProb: calculation.calibratedYesProb,
+            marketYesPrice: marketPrice / 100,
+            confidence: calculation.confidenceFactor || 0,
+            bankroll: bankroll,
+            strategy: arbitrageStrategyType
+          });
+          
+          setArbitrageStrategy(strategy);
+        }
+      } catch (error) {
+        console.error("Error in calculation useEffect:", error);
+      }
     }
-  }, [traders, mounted, marketPrice, bankroll]);
-
-  useEffect(() => {
-    if (mounted && result) {
-      const strategy = calculateArbitrageStrategy({
-        smartYesProb: result.calibratedYesProb,
-        marketYesPrice: marketPrice / 100, // Converting from percentage to decimal
-        confidence: result.confidenceFactor,
-        bankroll: bankroll,
-        strategy: arbitrageStrategyType
-      });
-      
-      console.log("Arbitrage strategy calculated:", strategy);
-      setArbitrageStrategy(strategy);
-    }
-  }, [result, marketPrice, bankroll, mounted, arbitrageStrategyType]);
+  }, [traders, mounted, marketPrice, bankroll, arbitrageStrategyType]);
 
   const addTrader = () => {
     setTraders([...traders, { 
+      name: "New Trader", 
       sentiment: "yes", 
       smartScore: 0, 
       dollarPosition: 0,
@@ -371,6 +395,131 @@ export default function SmartEdgeCalculatorPage() {
           <span>How it works</span>
         </Link>
       </div>
+      
+      {/* Smart Edge Config Switch */}
+      <div className="max-w-xl mx-auto mb-6">
+        <SmartEdgeConfigSwitch />
+        
+        {/* Add clickable buttons to toggle modes */}
+        <div className="flex justify-center mt-4 gap-4">
+          <Button
+            variant={activeConfig.useAdvancedMode ? "outline" : "default"}
+            className="w-1/2"
+            onClick={() => {
+              setCalculationMode(false);
+              // Recalculate with new mode
+              if (traders.length > 0) {
+                try {
+                  // Sanitize inputs to ensure valid calculations
+                  const validTraders = traders.map(trader => ({
+                    ...trader,
+                    name: trader.name || `Trader ${traders.indexOf(trader) + 1}`,
+                    smartScore: Number(trader.smartScore) || 0,
+                    dollarPosition: Number(trader.dollarPosition) || 0,
+                    entryPrice: trader.entryPrice !== undefined ? Number(trader.entryPrice) : marketPrice / 100,
+                    realizedPnl: trader.realizedPnl !== undefined ? Number(trader.realizedPnl) : 0,
+                    unrealizedPnl: trader.unrealizedPnl !== undefined ? Number(trader.unrealizedPnl) : 0,
+                    supplyOwnership: trader.supplyOwnership !== undefined ? Number(trader.supplyOwnership) : 0
+                  }));
+                  
+                  // Perform calculations with sanitized data
+                  const calculation = calculateSmartEdge(validTraders, marketPrice, bankroll);
+                  setResult(calculation);
+                  
+                  // Calculate arbitrage edge
+                  if (calculation.calibratedYesProb !== undefined && !isNaN(calculation.calibratedYesProb)) {
+                    const arbitrage = calculateArbitrageEdge(
+                      calculation.calibratedYesProb, 
+                      marketPrice, 
+                      bankroll,
+                      0.25
+                    );
+                    setArbitrageEdge(arbitrage);
+                    
+                    // Recalculate arbitrage strategy
+                    const strategy = calculateArbitrageStrategy({
+                      smartYesProb: calculation.calibratedYesProb,
+                      marketYesPrice: marketPrice / 100,
+                      confidence: calculation.confidenceFactor || 0,
+                      bankroll: bankroll,
+                      strategy: arbitrageStrategyType
+                    });
+                    
+                    setArbitrageStrategy(strategy);
+                  }
+                  
+                  toast.success("Switched to Classic Mode");
+                } catch (error) {
+                  console.error("Error switching to Classic Mode:", error);
+                  toast.error("Error switching mode: " + (error instanceof Error ? error.message : String(error)));
+                }
+              } else {
+                toast.info("Switched to Classic Mode (no data to calculate)");
+              }
+            }}
+          >
+            Classic Mode
+          </Button>
+          <Button
+            variant={activeConfig.useAdvancedMode ? "default" : "outline"}
+            className="w-1/2"
+            onClick={() => {
+              setCalculationMode(true);
+              // Recalculate with new mode
+              if (traders.length > 0) {
+                try {
+                  // Sanitize inputs to ensure valid calculations
+                  const validTraders = traders.map(trader => ({
+                    ...trader,
+                    name: trader.name || `Trader ${traders.indexOf(trader) + 1}`,
+                    smartScore: Number(trader.smartScore) || 0,
+                    dollarPosition: Number(trader.dollarPosition) || 0,
+                    entryPrice: trader.entryPrice !== undefined ? Number(trader.entryPrice) : marketPrice / 100,
+                    realizedPnl: trader.realizedPnl !== undefined ? Number(trader.realizedPnl) : 0,
+                    unrealizedPnl: trader.unrealizedPnl !== undefined ? Number(trader.unrealizedPnl) : 0,
+                    supplyOwnership: trader.supplyOwnership !== undefined ? Number(trader.supplyOwnership) : 0
+                  }));
+                  
+                  // Perform calculations with sanitized data
+                  const calculation = calculateSmartEdge(validTraders, marketPrice, bankroll);
+                  setResult(calculation);
+                  
+                  // Calculate arbitrage edge
+                  if (calculation.calibratedYesProb !== undefined && !isNaN(calculation.calibratedYesProb)) {
+                    const arbitrage = calculateArbitrageEdge(
+                      calculation.calibratedYesProb, 
+                      marketPrice, 
+                      bankroll,
+                      0.25
+                    );
+                    setArbitrageEdge(arbitrage);
+                    
+                    // Recalculate arbitrage strategy
+                    const strategy = calculateArbitrageStrategy({
+                      smartYesProb: calculation.calibratedYesProb,
+                      marketYesPrice: marketPrice / 100,
+                      confidence: calculation.confidenceFactor || 0,
+                      bankroll: bankroll,
+                      strategy: arbitrageStrategyType
+                    });
+                    
+                    setArbitrageStrategy(strategy);
+                  }
+                  
+                  toast.success("Switched to Advanced Mode");
+                } catch (error) {
+                  console.error("Error switching to Advanced Mode:", error);
+                  toast.error("Error switching mode: " + (error instanceof Error ? error.message : String(error)));
+                }
+              } else {
+                toast.info("Switched to Advanced Mode (no data to calculate)");
+              }
+            }}
+          >
+            Advanced Mode ✨
+          </Button>
+        </div>
+      </div>
 
       <Card className="mb-6 shadow-lg">
         <CardHeader className="cursor-pointer" onClick={() => setShowHowItWorks(!showHowItWorks)}>
@@ -421,6 +570,96 @@ export default function SmartEdgeCalculatorPage() {
                     // Final weighted influence<br/>
                     influence = dollarPosition × scoreWeight × pnlMultiplier × entryMultiplier × supplyMultiplier
                   </code>
+                </div>
+              </div>
+
+              {/* Add Advanced Mode section */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-md border border-blue-200 dark:border-blue-800">
+                <h5 className="font-medium text-blue-700 dark:text-blue-300">🚀 Advanced Mode Enhancements</h5>
+                <p className="text-sm mt-1 mb-2">
+                  Advanced Mode implements these formula improvements:
+                </p>
+                <div className="space-y-2">
+                  <div>
+                    <span className="font-medium">1. Logarithmic Score Scaling:</span>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-md mt-1 text-xs">
+                      <code>
+                        // Classic: Exponential scaling (can grow too quickly)<br/>
+                        scoreWeight = exp(smartScore ÷ 25)<br/><br/>
+                        
+                        // Advanced: Logarithmic scaling (more balanced growth)<br/>
+                        scoreWeight = log(1 + smartScore) // For positive scores<br/>
+                        scoreWeight = -log(1 + |smartScore|) // For negative scores
+                      </code>
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1 text-blue-600 dark:text-blue-400">
+                    Handles negative scores symmetrically and prevents exponential blowout with large values.
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium">2. PnL Influence Dampening:</span>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-md mt-1 text-xs">
+                      <code>
+                        // Classic: Hyperbolic tangent scaling<br/>
+                        pnlMultiplier = 1 + 0.5 × tanh(realizedPnl ÷ 1000) + 0.5 × tanh(unrealizedPnl ÷ 1000)<br/><br/>
+                        
+                        // Advanced: Logarithmic PnL scaling<br/>
+                        logPnl = sign(pnl) × log10(1 + |pnl| ÷ 100) ÷ 2<br/>
+                        pnlMultiplier = 1 + 0.5 × logPnl(realizedPnl) + 0.5 × logPnl(unrealizedPnl)
+                      </code>
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1 text-blue-600 dark:text-blue-400">
+                    Division by 2 intentionally dampens the effect to keep multipliers stable and prevent PnL from dominating.
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium">3. Thresholded Entry Advantage:</span>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-md mt-1 text-xs">
+                      <code>
+                        // Classic: Linear scaling with wide range<br/>
+                        entryMultiplier = 1 + 0.4 × max(-0.5, min(1, entryAdvantage))<br/><br/>
+                        
+                        // Advanced: Minimum effect threshold & tighter clamping<br/>
+                        if (|entryAdvantage| &lt; 0.01) entryMultiplier = 1;<br/>
+                        else entryMultiplier = 1 + 0.4 × clamp(entryAdvantage, -0.05, 0.05);
+                      </code>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium">4. Non-linear Confidence:</span>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-md mt-1 text-xs">
+                      <code>
+                        // Classic: Linear confidence factor<br/>
+                        confidenceFactor = rawConfidenceFactor<br/><br/>
+                        
+                        // Advanced: Power scaling for better differentiation<br/>
+                        confidenceFactor = Math.pow(rawConfidenceFactor, 0.6)
+                      </code>
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1 text-blue-600 dark:text-blue-400">
+                    Boosts weak signals slightly while softening overconfident spikes for more balanced calibration.
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium">5. Smoothed Edge Detection:</span>
+                    <div className="bg-white dark:bg-gray-800 p-2 rounded-md mt-1 text-xs">
+                      <code>
+                        // Classic: Hard threshold cutoff<br/>
+                        if (edge {'>'} THRESHOLD) bet;<br/><br/>
+                        
+                        // Advanced: Logistic function for smoother transition<br/>
+                        logistic(x) = 1 / (1 + exp(-k × (x - threshold)))<br/>
+                        scaledEdge = edge × logistic(edge, 20, THRESHOLD);
+                      </code>
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1 text-blue-600 dark:text-blue-400">
+                    Uses soft thresholding with THRESHOLD (0.02) as the ramp start point for gradual transition.
+                  </div>
                 </div>
               </div>
               
@@ -747,20 +986,25 @@ export default function SmartEdgeCalculatorPage() {
                           
                           <div className="space-y-2">
                             <Label htmlFor={`supply-ownership-${index}`}>Supply Ownership (%)</Label>
-                            <Input
-                              id={`supply-ownership-${index}`}
-                              type="number" 
-                              min={0}
-                              max={100}
-                              step={0.1}
-                              placeholder="e.g., 2.5"
-                              value={trader.supplyOwnership !== undefined ? trader.supplyOwnership * 100 : ''}
-                              onChange={(e) => {
-                                const value = e.target.value === '' ? undefined : Number(e.target.value) / 100;
-                                updateTrader(index, 'supplyOwnership', value as any);
-                              }}
-                            />
-                            <p className="text-xs text-gray-500">Percentage of total market owned</p>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                id={`supply-ownership-${index}`}
+                                type="number" 
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                placeholder="e.g., 0.17"
+                                value={trader.supplyOwnership !== undefined ? trader.supplyOwnership : ''}
+                                onChange={(e) => {
+                                  const value = e.target.value === '' ? undefined : Number(e.target.value);
+                                  updateTrader(index, 'supplyOwnership', value as any);
+                                }}
+                              />
+                              <span>(decimal)</span>
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Enter as decimal: 0.17 = 17% of market owned (shown as 'pct' in CSV files)
+                            </p>
                           </div>
                         </div>
                       </TableCell>
@@ -818,6 +1062,9 @@ export default function SmartEdgeCalculatorPage() {
                 />
                 <span>%</span>
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Enter the YES probability from the market (e.g., 75 means the market thinks there's a 75% chance of YES outcome)
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="bankroll">Your Bankroll</Label>
@@ -832,22 +1079,80 @@ export default function SmartEdgeCalculatorPage() {
                   className="w-[150px]"
                 />
               </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Your total available capital for betting. Smart Edge will calculate optimal bet sizes based on this amount.
+              </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Debug Card - Will remove after testing */}
-      <Card className="mb-6 border-4 border-red-500 bg-red-50">
-        <CardHeader>
-          <CardTitle>Debug Information</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div>
-            <p><strong>Arbitrage Strategy State:</strong> {arbitrageStrategy ? JSON.stringify(arbitrageStrategy) : "No strategy calculated"}</p>
-            <p><strong>Result State:</strong> {result ? "Results calculated" : "No results"}</p>
-            <p><strong>Market Price:</strong> {marketPrice}</p>
-            <p><strong>Bankroll:</strong> {bankroll}</p>
+          {/* Add manual refresh button */}
+          <div className="flex justify-end mt-4">
+            <Button 
+              onClick={() => {
+                try {
+                  // Force recalculation of results
+                  if (traders.length > 0) {
+                    // Sanitize inputs to ensure valid calculations
+                    const validTraders = traders.map(trader => ({
+                      ...trader,
+                      smartScore: Number(trader.smartScore) || 0,
+                      dollarPosition: Number(trader.dollarPosition) || 0,
+                      entryPrice: trader.entryPrice !== undefined ? Number(trader.entryPrice) : marketPrice / 100,
+                      realizedPnl: trader.realizedPnl !== undefined ? Number(trader.realizedPnl) : 0,
+                      unrealizedPnl: trader.unrealizedPnl !== undefined ? Number(trader.unrealizedPnl) : 0,
+                      supplyOwnership: trader.supplyOwnership !== undefined ? Number(trader.supplyOwnership) : 0
+                    }));
+                    
+                    // Log sanitized data for debugging
+                    console.log("Refreshing calculations with traders:", validTraders);
+                    console.log("Market Price:", marketPrice);
+                    console.log("Bankroll:", bankroll);
+                    
+                    // Perform calculations with sanitized data
+                    const calculation = calculateSmartEdge(validTraders, marketPrice, bankroll);
+                    setResult(calculation);
+                    
+                    // Calculate arbitrage edge
+                    const arbitrage = calculateArbitrageEdge(
+                      calculation.calibratedYesProb, 
+                      marketPrice, 
+                      bankroll,
+                      0.25 // Quarter Kelly
+                    );
+                    setArbitrageEdge(arbitrage);
+
+                    // Recalculate arbitrage strategy
+                    if (calculation.calibratedYesProb !== undefined && !isNaN(calculation.calibratedYesProb)) {
+                      const strategy = calculateArbitrageStrategy({
+                        smartYesProb: calculation.calibratedYesProb,
+                        marketYesPrice: marketPrice / 100,
+                        confidence: calculation.confidenceFactor || 0,
+                        bankroll: bankroll,
+                        strategy: arbitrageStrategyType
+                      });
+                      
+                      setArbitrageStrategy(strategy);
+                    }
+                    
+                    toast.success("Calculations refreshed successfully");
+                  } else {
+                    toast.error("No traders to calculate. Please add trader data first.");
+                  }
+                } catch (error) {
+                  console.error("Error refreshing calculations:", error);
+                  toast.error("Failed to refresh calculations: " + (error instanceof Error ? error.message : String(error)));
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 2v6h-6"></path>
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+                <path d="M3 12a9 9 0 0 0 6.7 15L13 21"></path>
+                <path d="M13 21h8v-8"></path>
+              </svg>
+              Refresh Calculations
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -929,6 +1234,37 @@ export default function SmartEdgeCalculatorPage() {
                             </div>
                           </div>
                         )}
+                        
+                        {/* Collapsible bet sizing explanation */}
+                        <details className="text-sm border border-gray-200 dark:border-gray-700 rounded-md mt-3">
+                          <summary className="bg-gray-50 dark:bg-gray-800 px-4 py-2 cursor-pointer font-medium flex items-center justify-between">
+                            <span>How Bet Sizing Works</span>
+                            <ChevronDown className="h-4 w-4" />
+                          </summary>
+                          <div className="p-4 bg-white dark:bg-gray-900 space-y-2">
+                            <p>Smart Edge combines Kelly criterion with confidence-based limits:</p>
+                            
+                            <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
+                              <h4 className="font-medium mb-1">Confidence-Based Limits:</h4>
+                              <ul className="list-disc pl-5 space-y-1">
+                                <li><span className="font-medium">Low Confidence:</span> Maximum 2% of bankroll</li>
+                                <li><span className="font-medium">Medium Confidence:</span> Maximum 5% of bankroll</li>
+                                <li><span className="font-medium">High Confidence:</span> Maximum 10% of bankroll</li>
+                              </ul>
+                            </div>
+                            
+                            <p>The final bet size is the smaller of:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                              <li>Quarter-Kelly bet size (conservative Kelly calculation)</li>
+                              <li>The confidence-based maximum</li>
+                            </ul>
+                            
+                            <div className="text-xs text-gray-500 mt-2">
+                              <p>Advanced Mode applies additional edge scaling for small edges to prevent overbetting.</p>
+                              <p>Both modes use the same confidence-based limits.</p>
+                            </div>
+                          </div>
+                        </details>
                       </div>
                     </Card>
                   </div>

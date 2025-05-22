@@ -414,9 +414,9 @@ calibratedYesProb = 0.5 + (rawYesProb - 0.5) × confidenceFactor`}
               <div className="flex items-start gap-3 p-3 border rounded-md">
                 <div className="text-2xl">🧠</div>
                 <div>
-                  <h3 className="font-medium">Bayesian Trader Weighting</h3>
+                  <h3 className="font-medium">Advanced Mode</h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Advanced statistical methods for cleaner probability estimates.
+                    Improved formulas with logarithmic scaling and smoothed edge detection (now available).
                   </p>
                 </div>
               </div>
@@ -497,7 +497,72 @@ calibratedYesProb = 0.5 + (rawYesProb - 0.5) × confidenceFactor`}
             </p>
             <div className="space-y-6">
               <div>
-                <h3 className="font-medium text-lg">May 22, 2025 (Current Version)</h3>
+                <h3 className="font-medium text-lg">May 27, 2025 (v2.1.1 - Current Version)</h3>
+                <ul className="list-disc pl-5 space-y-1 mt-2">
+                  <li>
+                    <strong>Advanced Mode Documentation:</strong> Enhanced explanations of the advanced calculation methods:
+                    <ul className="list-disc pl-5 space-y-0.5 mt-1">
+                      <li>Added detailed explanations of all five formula improvements in the Advanced Mode</li>
+                      <li>Included mathematical notation and proper code examples</li>
+                      <li>Clarified how negative scores are handled symmetrically in logarithmic scaling</li>
+                      <li>Added explanation of PnL dampening factors and their purpose</li>
+                      <li>Improved documentation of logistic edge detection with threshold explanation</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Bet Sizing Transparency:</strong> Added collapsible "How Bet Sizing Works" section:
+                    <ul className="list-disc pl-5 space-y-0.5 mt-1">
+                      <li>Documented confidence-based betting limits (2% for Low, 5% for Medium, 10% for High)</li>
+                      <li>Clarified how Kelly criterion and confidence limits work together</li>
+                      <li>Explained advanced edge scaling for small edges to prevent overbetting</li>
+                    </ul>
+                  </li>
+                </ul>
+                
+                <h3 className="font-medium text-lg">May 26, 2025 (v2.1)</h3>
+                <ul className="list-disc pl-5 space-y-1 mt-2">
+                  <li>
+                    <strong>Improved UI Clarity:</strong> Added detailed explanations to key input fields:
+                    <ul className="list-disc pl-5 space-y-0.5 mt-1">
+                      <li>Clarified that "Current Market Price" refers to the YES probability percentage from the market</li>
+                      <li>Added context about Bankroll functionality and its relation to bet sizing</li>
+                      <li>Enhanced mode toggle with specific guidance on when to use each calculation mode</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-lg">May 25, 2025 (v2.0)</h3>
+                <ul className="list-disc pl-5 space-y-1 mt-2">
+                  <li>
+                    <strong>Advanced Mode Release:</strong> Introduced configurable calculation modes. The new Advanced Mode offers improved formulas with:
+                    <ul className="list-disc pl-5 space-y-0.5 mt-1">
+                      <li>Logarithmic scaling for smart scores to prevent exponential blowout (replacing <code>exp(score/25)</code> with <code>log(1+score)</code>)</li>
+                      <li>Better handling of PnL influence with dampened logarithmic scaling for smoother response to large values</li>
+                      <li>Thresholded entry price advantage with minimum effect zone (1%) and clamped maximum impact (±5%)</li>
+                      <li>Non-linear confidence scaling using power function (<code>rawConfidence^0.6</code>) for better mid-range differentiation</li>
+                      <li>Smoothed edge detection using logistic functions to avoid hard thresholds</li>
+                      <li>Kelly bet sizing improvements for small edges using <code>edge^1.5</code> scaling to prevent overbetting</li>
+                    </ul>
+                  </li>
+                  <li>
+                    <strong>Configuration System:</strong> Created a flexible <code>smartEdgeConfig.ts</code> module that allows toggling between modes while maintaining full backward compatibility with Classic mode.
+                  </li>
+                  <li>
+                    <strong>Toggle UI:</strong> Added a sleek switch UI component to let users toggle between Classic and Advanced modes with explanatory labels and details about each mode's features.
+                  </li>
+                  <li>
+                    <strong>Performance Improvements:</strong> Added position size dampening for large positions to prevent whales from completely dominating the probability calculations.
+                  </li>
+                  <li>
+                    <strong>Technical Implementation:</strong> Created a shadow implementation (<code>calculateSmartEdgeAdvanced.ts</code>) that preserves all original behavior in Classic mode while enabling the new formulas in Advanced mode. This ensures zero risk to existing functionality.
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-lg">May 22, 2025</h3>
                 <ul className="list-disc pl-5 space-y-1 mt-2">
                   <li>
                     <strong>Consolidation & Refinement:</strong> Streamlined calculator versions. The Smart Edge page (`/smart-edge`) is now the primary, most advanced calculator, superseding `vote-gravity-calculator-v1.2`.
